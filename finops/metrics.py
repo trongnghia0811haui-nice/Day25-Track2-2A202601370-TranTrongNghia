@@ -31,7 +31,7 @@ def arithmetic_intensity(flops: float, bytes_moved: float) -> float:
     """FLOP / byte for a workload (the x-axis of the roofline model)."""
     if bytes_moved <= 0:
         return 0.0
-    return flops / bytes_moved
+    return max(0.0, flops / bytes_moved)
 
 
 def roofline_regime(intensity: float, ridge_point: float) -> str:

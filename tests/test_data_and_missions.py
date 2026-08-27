@@ -1,4 +1,5 @@
 import os, sys
+import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from data import generate
@@ -25,3 +26,17 @@ def test_missions_end_to_end():
     assert 0.85 <= r4["tag_coverage"] <= 1.0
     r5 = m5_report.run(verbose=False)
     assert 40 <= r5["total_savings_pct"] <= 95
+
+
+def test_m2_rejects_unknown_route_tier(monkeypatch):
+    row = {
+        "input_tokens": "100",
+        "output_tokens": "20",
+        "cached_input_tokens": "0",
+        "is_batch": "0",
+        "is_reasoning": "0",
+        "route_tier": "experimental",
+    }
+    monkeypatch.setattr(m2_inference_levers, "load_csv", lambda _name: [row])
+    with pytest.raises(ValueError, match="unsupported route_tier"):
+        m2_inference_levers.run(verbose=False)

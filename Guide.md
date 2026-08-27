@@ -1,7 +1,7 @@
 # Hướng dẫn Hoàn thành Lab 25 — GPU FinOps Optimization
 
 > Hướng dẫn từng bước dành cho sinh viên thực hiện Lab 25.
-> Yêu cầu: Python 3.9+, không cần GPU, không cần cloud account, không cần API key.
+> Yêu cầu: Python 3.10+, không cần GPU, không cần cloud account, không cần API key.
 
 ---
 
@@ -155,6 +155,10 @@ print(df[["job_id", "gpu_type", "num_gpus", "hours_per_day", "interruptible"]])
 ```
 
 `interruptible=1` → phù hợp với spot instance + checkpoint.
+
+`days` là số ngày thực tế job chạy trong kỳ. Mission 3 dùng trường này để
+không quy mọi job về đủ 30 ngày; nếu tự tạo CSV cũ thiếu cột `days`, code dùng
+30 ngày làm giá trị mặc định tương thích ngược.
 
 ---
 
@@ -402,16 +406,10 @@ M5 kết hợp 4 "đòn bẩy" tiết kiệm:
 python missions/m5_report.py
 ```
 
-**Kết quả mong đợi:**
-```
-== M5 Optimization Report ==
-# NimbusAI — GPU Cost Optimization Report
-Baseline spend: $27,133
-Optimized spend: $14,626
-Projected savings: $12,507 (46%)
-...
-Written: outputs/report.md + outputs/savings.png
-```
+**Kết quả mong đợi:** M5 sẽ in baseline/optimized và savings theo dữ liệu hiện
+tại. Vì M3 dùng `days` thực tế của từng job và M5 giới hạn M1 savings vào
+affected GPU-hour scope, không nên dùng các con số mẫu cũ để đối chiếu exact;
+hãy lấy số liệu từ chính output của lần chạy.
 
 ### Bước 8.3 — Đọc báo cáo đầu ra
 
@@ -428,7 +426,9 @@ Báo cáo có phần:
 ## Sustainability
 - Energy per query: 0.24 Wh
 - Carbon per query: 0.091 gCO2e
-- Cheapest+cleanest region: europe-north1
+- Cleanest region (carbon): europe-north1
+- Cheapest region (electricity): us-east-wa
+- Balanced region (normalized cost + carbon): europe-north1
 ```
 
 Vùng **europe-north1** (Na Uy) rẻ và sạch nhất do thủy điện. Vùng **europe-central2** (Ba Lan) có carbon 660 gCO2/kWh — dơ nhất. Chọn vùng triển khai đúng vừa tiết kiệm tiền, vừa giảm phát thải.
@@ -612,7 +612,9 @@ Hàm `flag_util_lies()` cần:
 
 ### Lỗi: matplotlib không tạo được PNG
 
-Lab vẫn pass nếu không có matplotlib (PNG bị bỏ qua). Kiểm tra `pip show matplotlib` và cài lại nếu cần.
+`matplotlib` là dependency bắt buộc để tạo artifact `outputs/savings.png`.
+Kiểm tra `pip show matplotlib`, cài lại bằng `pip install -r requirements.txt`
+và chạy lại M5.
 
 ### Warnings về `is_batch` type
 

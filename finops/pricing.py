@@ -4,6 +4,26 @@ Figures are June-2026 as-of snapshots from the deck's RESEARCH dossier; treat
 live prices as fast-moving (re-baseline before each cohort).
 """
 from __future__ import annotations
+import math
+
+
+def _non_negative(value, name: str) -> float:
+    """Validate a finite non-negative numeric input at the pricing boundary."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite non-negative number") from exc
+    if not math.isfinite(numeric) or numeric < 0:
+        raise ValueError(f"{name} must be a finite non-negative number")
+    return numeric
+
+
+def _fraction(value, name: str) -> float:
+    """Validate a finite fraction in the inclusive [0, 1] interval."""
+    numeric = _non_negative(value, name)
+    if numeric > 1:
+        raise ValueError(f"{name} must be between 0 and 1")
+    return numeric
 
 
 def request_cost(
@@ -17,6 +37,13 @@ def request_cost(
     batch_discount: float = 0.50,   # Batch API ~ -50%
 ) -> float:
     """USD cost of a single request. Cached input billed at cache_discount x price."""
+    input_tok = _non_negative(input_tok, "input_tok")
+    output_tok = _non_negative(output_tok, "output_tok")
+    price_in_per_m = _non_negative(price_in_per_m, "price_in_per_m")
+    price_out_per_m = _non_negative(price_out_per_m, "price_out_per_m")
+    cached_in = _non_negative(cached_in, "cached_in")
+    cache_discount = _fraction(cache_discount, "cache_discount")
+    batch_discount = _fraction(batch_discount, "batch_discount")
     cached_in = min(max(0, cached_in), input_tok)
     uncached_in = input_tok - cached_in
     cost = (
@@ -31,6 +58,8 @@ def request_cost(
 
 def dollars_per_million(total_cost_usd: float, total_tokens: int) -> float:
     """Aggregate unit economics: $ per 1,000,000 tokens served."""
+    total_cost_usd = _non_negative(total_cost_usd, "total_cost_usd")
+    total_tokens = _non_negative(total_tokens, "total_tokens")
     if total_tokens <= 0:
         return 0.0
     return total_cost_usd / (total_tokens / 1e6)
@@ -47,6 +76,9 @@ def discount_stack(
     Discounts MULTIPLY: cache applies to the cached share of input, batch to the
     whole bill. batch + 100% cache-hit -> 0.5 * 0.1 = 0.05 (~95% off).
     """
+    cache_hit_frac = _fraction(cache_hit_frac, "cache_hit_frac")
+    batch_discount = _fraction(batch_discount, "batch_discount")
+    cache_discount = _fraction(cache_discount, "cache_discount")
     cache_mult = cache_hit_frac * cache_discount + (1.0 - cache_hit_frac)
     batch_mult = batch_discount if batch else 1.0
     return cache_mult * batch_mult
@@ -68,7 +100,9 @@ def recommend_tier(hours_per_day: float, interruptible: bool, reserved_discount:
       - duty cycle >= break-even  -> 'reserved'  (steady, high utilization)
       - otherwise                 -> 'on_demand' (spiky / low duty)
     """
-    duty = max(0.0, hours_per_day) / 24.0
+    hours_per_day = _non_negative(hours_per_day, "hours_per_day")
+    reserved_discount = _fraction(reserved_discount, "reserved_discount")
+    duty = hours_per_day / 24.0
     be = break_even_utilization(reserved_discount)
     if interruptible and hours_per_day < 24:
         return "spot"
@@ -90,6 +124,14 @@ def spot_checkpoint_cost(
     Interruptions waste the compute since the last checkpoint (rework); checkpointing
     adds a small steady overhead. Spot still wins for interruptible jobs.
     """
+    job_hours = _non_negative(job_hours, "job_hours")
+    spot_hr = _non_negative(spot_hr, "spot_hr")
+    on_demand_hr = _non_negative(on_demand_hr, "on_demand_hr")
+    interrupt_rate = _fraction(interrupt_rate, "interrupt_rate")
+    ckpt_overhead_frac = _non_negative(ckpt_overhead_frac, "ckpt_overhead_frac")
+    rework_hours_per_interrupt = _non_negative(
+        rework_hours_per_interrupt, "rework_hours_per_interrupt"
+    )
     expected_interrupts = job_hours * interrupt_rate
     rework_hours = expected_interrupts * rework_hours_per_interrupt
     effective_hours = job_hours * (1.0 + ckpt_overhead_frac) + rework_hours

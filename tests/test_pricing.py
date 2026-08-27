@@ -1,4 +1,5 @@
 import os, sys
+import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from finops import pricing
 
@@ -26,6 +27,38 @@ def test_request_cost_and_cache():
     assert cached < full                       # caching reduces cost
     batched = pricing.request_cost(1000, 1000, 3.0, 15.0, batch=True)
     assert abs(batched - full * 0.5) < 1e-9    # batch = -50%
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"input_tok": -1, "output_tok": 0, "price_in_per_m": 1, "price_out_per_m": 1},
+    {"input_tok": 0, "output_tok": -1, "price_in_per_m": 1, "price_out_per_m": 1},
+    {"input_tok": 0, "output_tok": 0, "price_in_per_m": -1, "price_out_per_m": 1},
+    {"input_tok": 0, "output_tok": 0, "price_in_per_m": 1, "price_out_per_m": -1},
+    {"input_tok": 0, "output_tok": 0, "price_in_per_m": 1, "price_out_per_m": 1, "cached_in": -1},
+])
+def test_request_cost_rejects_negative_inputs(kwargs):
+    with pytest.raises(ValueError, match="non-negative"):
+        pricing.request_cost(**kwargs)
+
+
+def test_pricing_rejects_invalid_fractions_and_tiers():
+    with pytest.raises(ValueError, match="cache_hit_frac"):
+        pricing.discount_stack(cache_hit_frac=1.1)
+    with pytest.raises(ValueError, match="batch_discount"):
+        pricing.request_cost(1, 1, 1, 1, batch_discount=1.1)
+    with pytest.raises(ValueError, match="hours_per_day"):
+        pricing.recommend_tier(-1, False)
+    with pytest.raises(ValueError, match="total_cost_usd"):
+        pricing.dollars_per_million(-1, 100)
+    with pytest.raises(ValueError, match="job_hours"):
+        pricing.spot_checkpoint_cost(-1, 1, 2)
+
+
+def test_recommend_tier_boundary_and_all_branches():
+    assert pricing.recommend_tier(13.2, False) == "reserved"  # 55% duty-cycle break-even
+    assert pricing.recommend_tier(13.2, True) == "spot"
+    assert pricing.recommend_tier(4, False) == "on_demand"
+    assert pricing.recommend_tier(24, True) == "reserved"
 
 
 def test_spot_checkpoint_saves():

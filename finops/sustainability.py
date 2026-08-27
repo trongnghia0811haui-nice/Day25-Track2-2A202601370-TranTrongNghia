@@ -24,6 +24,28 @@ REGION_PRICE_KWH = {
 REASONING_ENERGY_MULTIPLIER = 80.0  # deck: reasoning ~74-86x a small-model query
 
 
+def region_choices() -> dict[str, str]:
+    """Return explicit cheapest, cleanest and balanced region choices.
+
+    ``balanced`` minimizes price and carbon after normalizing each dimension
+    to its best available value.  The three choices stay separate because
+    the cheapest region is not necessarily the cleanest one.
+    """
+    regions = sorted(set(REGION_CARBON) & set(REGION_PRICE_KWH))
+    if not regions:
+        return {"cheapest": "n/a", "cleanest": "n/a", "balanced": "n/a"}
+    cheapest = min(regions, key=lambda region: REGION_PRICE_KWH[region])
+    cleanest = min(regions, key=lambda region: REGION_CARBON[region])
+    min_price = min(REGION_PRICE_KWH[region] for region in regions)
+    min_carbon = min(REGION_CARBON[region] for region in regions)
+    balanced = min(
+        regions,
+        key=lambda region: (REGION_PRICE_KWH[region] / min_price)
+        + (REGION_CARBON[region] / min_carbon),
+    )
+    return {"cheapest": cheapest, "cleanest": cleanest, "balanced": balanced}
+
+
 def wh_per_query(total_tokens: int, wh_per_1k_tokens: float = 0.30, is_reasoning: bool = False) -> float:
     """Energy for one query. Median Gemini prompt ~0.24 Wh; reasoning ~74-86x."""
     base = (total_tokens / 1000.0) * wh_per_1k_tokens
